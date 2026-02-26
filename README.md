@@ -60,6 +60,8 @@ curl -X POST http://localhost:8000/api/honeypot \
   }'
 ```
 
+> **Note:** The `timestamp` field accepts both strings (ISO-8601) and integers/floats (epoch milliseconds).
+
 ## 🌐 API Endpoints
 
 | Method | Endpoint | Description |
@@ -210,7 +212,14 @@ After deployment, submit these details to GUVI:
 ```json
 {
   "status": "success",
-  "reply": "Oh dear, what has happened? Please help me!"
+  "reply": {
+    "message": "Oh dear, what has happened? Please help me!",
+    "confidence": 0.85,
+    "scamDetected": true,
+    "scamType": "UPI Fraud",
+    "extractedIntelligence": {},
+    "engagementPhase": "initial"
+  }
 }
 ```
 
@@ -258,6 +267,7 @@ Payload:
 | 500 Internal Server Error | Check logs in Azure Portal → "Log stream" |
 | INVALID_REQUEST_BODY | Ensure URL ends with `/api/honeypot` |
 | API Key error | Verify `x-api-key` header matches your `API_KEY` |
+| Timestamp validation error | `timestamp` accepts string, int, or float — no conversion needed |
 | Cold start delays | Use Azure B1 tier (not free tier) |
 | Build fails | Check if all dependencies are in `requirements.txt` |
 
