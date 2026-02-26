@@ -2,11 +2,12 @@
 Tests for the Honeypot API — validates GUVI evaluation compliance.
 
 Checks:
-1. Response schema: reply is an object with message, confidence, scamDetected, etc.
+1. Response schema: reply is a plain string, extra fields at top level
 2. Content-Type is always application/json
 3. Valid scam messages return correct detection results
 4. Malformed payloads return HTTP 400
 5. Missing API key returns HTTP 401/422
+6. Intelligence extraction works (phone numbers, bank accounts, UPI IDs)
 """
 
 import pytest
@@ -29,24 +30,25 @@ HEADERS = {"x-api-key": API_KEY, "Content-Type": "application/json"}
 # --- Helper ---
 
 def assert_valid_reply_schema(data: dict):
-    """Assert the response matches GUVI's expected contract."""
+    """Assert the response matches GUVI's expected contract (flat format)."""
     assert "status" in data, "Missing 'status' field"
     assert "reply" in data, "Missing 'reply' field"
 
-    reply = data["reply"]
-    assert isinstance(reply, dict), f"'reply' must be an object, got {type(reply).__name__}"
-    assert "message" in reply, "reply missing 'message'"
-    assert "confidence" in reply, "reply missing 'confidence'"
-    assert "scamDetected" in reply, "reply missing 'scamDetected'"
-    assert "scamType" in reply, "reply missing 'scamType'"
-    assert "extractedIntelligence" in reply, "reply missing 'extractedIntelligence'"
-    assert "engagementPhase" in reply, "reply missing 'engagementPhase'"
+    # reply must be a PLAIN STRING (not an object)
+    assert isinstance(data["reply"], str), f"'reply' must be a string, got {type(data['reply']).__name__}"
+    assert len(data["reply"]) > 0, "reply must not be empty"
 
-    assert isinstance(reply["message"], str)
-    assert isinstance(reply["confidence"], (int, float))
-    assert isinstance(reply["scamDetected"], bool)
-    assert isinstance(reply["scamType"], str)
-    assert isinstance(reply["extractedIntelligence"], dict)
+    # Extra fields at top level
+    assert "confidence" in data, "Missing 'confidence' field"
+    assert "scamDetected" in data, "Missing 'scamDetected' field"
+    assert "scamType" in data, "Missing 'scamType' field"
+    assert "extractedIntelligence" in data, "Missing 'extractedIntelligence' field"
+    assert "engagementPhase" in data, "Missing 'engagementPhase' field"
+
+    assert isinstance(data["confidence"], (int, float))
+    assert isinstance(data["scamDetected"], bool)
+    assert isinstance(data["scamType"], str)
+    assert isinstance(data["extractedIntelligence"], dict)
 
 
 # --- Tests ---
@@ -90,10 +92,9 @@ class TestResponseSchema:
         assert data["status"] == "success"
 
         # This message has clear scam signals
-        reply = data["reply"]
-        assert reply["scamDetected"] is True
-        assert reply["confidence"] > 0
-        assert len(reply["message"]) > 0
+        assert data["scamDetected"] is True
+        assert data["confidence"] > 0
+        assert len(data["reply"]) > 0
 
     def test_normal_message(self, client):
         """A non-scam message should still return the correct schema."""
@@ -125,8 +126,8 @@ class TestResponseSchema:
         data = resp.json()
         assert_valid_reply_schema(data)
 
-    def test_reply_is_not_string(self, client):
-        """CRITICAL: reply must NEVER be a plain string."""
+    def test_reply_is_string(self, client):
+        """CRITICAL: reply MUST be a plain string (not an object)."""
         payload = {
             "sessionId": "test-session-schema",
             "message": {"sender": "scammer", "text": "Send money now!"},
@@ -134,8 +135,8 @@ class TestResponseSchema:
         }
         resp = client.post("/api/honeypot", json=payload, headers=HEADERS)
         data = resp.json()
-        assert not isinstance(data.get("reply"), str), \
-            "FAIL: 'reply' is a plain string — GUVI requires it to be an object!"
+        assert isinstance(data.get("reply"), str), \
+            "FAIL: 'reply' must be a plain string for GUVI!"
 
 
 class TestInputValidation:
@@ -164,6 +165,35 @@ class TestInputValidation:
         }
         resp = client.post("/api/honeypot", json=payload, headers=HEADERS)
         assert resp.status_code == 400
+
+    def test_timestamp_as_integer(self, client):
+        """timestamp sent as integer should be accepted (GUVI sends this)."""
+        payload = {
+            "sessionId": "test-timestamp-int",
+            "message": {
+                "sender": "scammer",
+                "text": "Send money now!",
+                "timestamp": 1772102249669
+            },
+            "conversationHistory": []
+        }
+        resp = client.post("/api/honeypot", json=payload, headers=HEADERS)
+        assert resp.status_code == 200
+
+    def test_conversation_history_with_dict_text(self, client):
+        """GUVI sends reply objects back as text in conversationHistory."""
+        payload = {
+            "sessionId": "test-dict-text",
+            "message": {"sender": "scammer", "text": "Send money!"},
+            "conversationHistory": [
+                {"sender": "scammer", "text": "Your account is blocked!"},
+                {"sender": "user", "text": {"message": "Oh no!", "confidence": 0.5, "scamDetected": True}},
+            ]
+        }
+        resp = client.post("/api/honeypot", json=payload, headers=HEADERS)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert_valid_reply_schema(data)
 
 
 class TestAuthentication:
@@ -204,3 +234,52 @@ class TestContentType:
     def test_error_content_type(self, client):
         resp = client.post("/api/honeypot", json={"bad": "data"}, headers=HEADERS)
         assert "application/json" in resp.headers["content-type"]
+
+
+class TestIntelligenceExtraction:
+    """Verify intelligence extraction works correctly."""
+
+    def test_extracts_upi_id(self, client):
+        """UPI IDs should be detected."""
+        payload = {
+            "sessionId": "test-intel-upi",
+            "message": {
+                "sender": "scammer",
+                "text": "Send money to scammer@ybl immediately!"
+            },
+            "conversationHistory": []
+        }
+        resp = client.post("/api/honeypot", json=payload, headers=HEADERS)
+        data = resp.json()
+        intel = data.get("extractedIntelligence", {})
+        assert "scammer@ybl" in intel.get("upiIds", [])
+
+    def test_extracts_phone_with_dashes(self, client):
+        """Phone numbers with dashes should be detected."""
+        payload = {
+            "sessionId": "test-intel-phone",
+            "message": {
+                "sender": "scammer",
+                "text": "Call me at +91-9876543210 for verification."
+            },
+            "conversationHistory": []
+        }
+        resp = client.post("/api/honeypot", json=payload, headers=HEADERS)
+        data = resp.json()
+        intel = data.get("extractedIntelligence", {})
+        assert "+919876543210" in intel.get("phoneNumbers", [])
+
+    def test_extracts_bank_account(self, client):
+        """16-digit bank account numbers near context keywords should be detected."""
+        payload = {
+            "sessionId": "test-intel-bank",
+            "message": {
+                "sender": "scammer",
+                "text": "Transfer to account number 1234567890123456 now!"
+            },
+            "conversationHistory": []
+        }
+        resp = client.post("/api/honeypot", json=payload, headers=HEADERS)
+        data = resp.json()
+        intel = data.get("extractedIntelligence", {})
+        assert "1234567890123456" in intel.get("bankAccounts", [])

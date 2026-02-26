@@ -37,10 +37,10 @@ class IntelligenceExtractor:
     
     # Indian phone number patterns
     PHONE_PATTERNS = [
-        re.compile(r'\+91[\s-]?[6-9]\d{9}'),          # +91 format
-        re.compile(r'91[\s-]?[6-9]\d{9}'),             # 91 format
-        re.compile(r'0[6-9]\d{9}'),                    # 0 prefix
-        re.compile(r'\b[6-9]\d{9}\b'),                 # 10 digit starting with 6-9
+        re.compile(r'\+91[\s-]*[6-9][\d\s-]{8,12}\d'),  # +91 with dashes/spaces
+        re.compile(r'\b91[\s-]?[6-9]\d{9}\b'),           # 91 format
+        re.compile(r'\b0[6-9]\d{9}\b'),                  # 0 prefix
+        re.compile(r'\b[6-9]\d{9}\b'),                   # 10 digit starting with 6-9
     ]
     
     # Bank account patterns (Indian)
@@ -124,18 +124,31 @@ class IntelligenceExtractor:
         """Extract potential bank account numbers from text"""
         accounts = []
         
-        # Extract numeric patterns (potential account numbers)
-        acc_pattern = re.compile(r'\b(\d{9,18})\b')
-        matches = acc_pattern.findall(text)
-        for match in matches:
-            if 9 <= len(match) <= 18:
-                if match not in accounts:
+        # First, find all phone numbers so we can exclude them
+        phone_digits = set()
+        for phone in cls.extract_phone_numbers(text):
+            digits = re.sub(r'\D', '', phone)
+            phone_digits.add(digits[-10:])  # last 10 digits
+        
+        # Context-aware: look for account numbers near keywords
+        context_patterns = [
+            re.compile(r'(?:account|a/c|acc|acct)[\s#:.-]*?(\d{9,18})', re.IGNORECASE),
+            re.compile(r'(\d{9,18})[\s]*(?:account|a/c)', re.IGNORECASE),
+        ]
+        for pattern in context_patterns:
+            for match in pattern.findall(text):
+                if match not in accounts and match[-10:] not in phone_digits:
                     accounts.append(match)
+        
+        # Also grab any standalone long numbers (11+ digits are likely accounts, not phones)
+        long_num_pattern = re.compile(r'\b(\d{11,18})\b')
+        for match in long_num_pattern.findall(text):
+            if match not in accounts and match[-10:] not in phone_digits:
+                accounts.append(match)
         
         # Extract IFSC codes
         ifsc_pattern = re.compile(r'\b([A-Z]{4}0[A-Z0-9]{6})\b')
-        ifsc_matches = ifsc_pattern.findall(text)
-        for match in ifsc_matches:
+        for match in ifsc_pattern.findall(text):
             if match not in accounts:
                 accounts.append(match)
         

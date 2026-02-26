@@ -340,17 +340,16 @@ async def honeypot_endpoint(
         scam_type
     )
     
-    # Extract intelligence from all available text
+    # Extract intelligence from ALL available text (current + history)
     full_text = message_text
     for msg in history:
-        if msg.get("sender") == "scammer":
-            full_text += " " + msg.get("text", "")
+        full_text += " " + msg.get("text", "")
     
     intel = IntelligenceExtractor.extract_all(full_text)
     session_manager.add_intelligence(session_id, intel)
     
-    # Generate AI response
-    turn_number = session.total_messages
+    # Generate AI response - use conversation history length for proper turn counting
+    turn_number = len(history) + 1  # Include current message
     
     reply_text = generate_response(
         scammer_message=message_text,
