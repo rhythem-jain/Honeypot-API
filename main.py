@@ -274,6 +274,24 @@ async def honeypot_endpoint(
             media_type="application/json"
         )
     
+    # Pre-sanitize body to fix GUVI type mismatches BEFORE Pydantic validation
+    def sanitize_message(msg):
+        """Fix fields that GUVI sends as wrong types"""
+        if not isinstance(msg, dict):
+            return msg
+        # GUVI sends the full reply object back as 'text' - extract just the message string
+        if 'text' in msg and isinstance(msg['text'], dict):
+            msg['text'] = msg['text'].get('message', str(msg['text']))
+        # Coerce timestamp to string
+        if 'timestamp' in msg and msg['timestamp'] is not None:
+            msg['timestamp'] = str(msg['timestamp'])
+        return msg
+    
+    if isinstance(body.get('message'), dict):
+        body['message'] = sanitize_message(body['message'])
+    if isinstance(body.get('conversationHistory'), list):
+        body['conversationHistory'] = [sanitize_message(m) for m in body['conversationHistory'] if isinstance(m, dict)]
+    
     # Parse and validate request
     try:
         req = HoneypotRequest(**body)
