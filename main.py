@@ -17,7 +17,7 @@ from fastapi import FastAPI, HTTPException, Header, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from config import settings
 from scam_detector import ScamDetector
@@ -41,6 +41,26 @@ class Message(BaseModel):
     sender: str = Field(..., description="Either 'scammer' or 'user'")
     text: str = Field(..., description="Message content")
     timestamp: Optional[Union[str, int, float]] = Field(default=None, description="ISO-8601 timestamp or epoch millis")
+
+    @field_validator('text', mode='before')
+    @classmethod
+    def coerce_text(cls, v):
+        """GUVI sends the full reply object back as text in conversationHistory"""
+        if isinstance(v, dict):
+            return v.get('message', str(v))
+        return str(v)
+
+    @field_validator('sender', mode='before')
+    @classmethod
+    def coerce_sender(cls, v):
+        return str(v)
+
+    @field_validator('timestamp', mode='before')
+    @classmethod
+    def coerce_timestamp(cls, v):
+        if v is None:
+            return v
+        return str(v) if not isinstance(v, str) else v
 
 
 class Metadata(BaseModel):
