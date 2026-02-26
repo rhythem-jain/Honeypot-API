@@ -212,14 +212,12 @@ After deployment, submit these details to GUVI:
 ```json
 {
   "status": "success",
-  "reply": {
-    "message": "Oh dear, what has happened? Please help me!",
-    "confidence": 0.85,
-    "scamDetected": true,
-    "scamType": "UPI Fraud",
-    "extractedIntelligence": {},
-    "engagementPhase": "initial"
-  }
+  "reply": "Oh dear, what has happened? Please help me!",
+  "confidence": 0.85,
+  "scamDetected": true,
+  "scamType": "UPI Fraud",
+  "extractedIntelligence": {},
+  "engagementPhase": "initial"
 }
 ```
 

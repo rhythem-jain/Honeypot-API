@@ -81,20 +81,15 @@ class HoneypotRequest(BaseModel):
     metadata: Optional[Metadata] = Field(default=None)
 
 
-class Reply(BaseModel):
-    """Structured reply object — GUVI expects reply to be an object, NOT a plain string"""
-    message: str = Field(..., description="Agent's response message text")
+class HoneypotResponse(BaseModel):
+    """Response from honeypot endpoint - GUVI expects reply as a PLAIN STRING"""
+    status: str = Field(default="success")
+    reply: str = Field(..., description="Agent's response message text (plain string)")
     confidence: float = Field(default=0.0, description="Scam detection confidence 0.0-1.0")
     scamDetected: bool = Field(default=False, description="Whether scam was detected")
     scamType: str = Field(default="Unknown", description="Type of scam detected")
     extractedIntelligence: dict = Field(default_factory=dict, description="Extracted intelligence data")
     engagementPhase: str = Field(default="initial", description="Current engagement phase")
-
-
-class HoneypotResponse(BaseModel):
-    """Response from honeypot endpoint - MUST match this format for GUVI"""
-    status: str = Field(default="success")
-    reply: Reply = Field(..., description="Structured reply object")
 
 
 # ============ Application Setup ============
@@ -262,14 +257,12 @@ async def honeypot_endpoint(
             status_code=200,
             content=HoneypotResponse(
                 status="success",
-                reply=Reply(
-                    message="Hello! How can I help you today?",
-                    confidence=0.0,
-                    scamDetected=False,
-                    scamType="Unknown",
-                    extractedIntelligence={},
-                    engagementPhase="initial"
-                )
+                reply="Hello! How can I help you today?",
+                confidence=0.0,
+                scamDetected=False,
+                scamType="Unknown",
+                extractedIntelligence={},
+                engagementPhase="initial"
             ).model_dump(),
             media_type="application/json"
         )
@@ -388,19 +381,17 @@ async def honeypot_endpoint(
     from ai_agent import get_engagement_phase
     phase = get_engagement_phase(turn_number)
     
-    # Build structured reply object (GUVI-compliant)
+    # Build response (GUVI expects reply as plain string)
     return JSONResponse(
         status_code=200,
         content=HoneypotResponse(
             status="success",
-            reply=Reply(
-                message=reply_text,
-                confidence=round(confidence, 2),
-                scamDetected=is_scam,
-                scamType=scam_type,
-                extractedIntelligence=intel,
-                engagementPhase=phase
-            )
+            reply=reply_text,
+            confidence=round(confidence, 2),
+            scamDetected=is_scam,
+            scamType=scam_type,
+            extractedIntelligence=intel,
+            engagementPhase=phase
         ).model_dump(),
         media_type="application/json"
     )
@@ -471,14 +462,12 @@ async def global_exception_handler(request: Request, exc: Exception):
         status_code=200,
         content=HoneypotResponse(
             status="success",
-            reply=Reply(
-                message="I'm having some trouble understanding. Can you please repeat that?",
-                confidence=0.0,
-                scamDetected=False,
-                scamType="Unknown",
-                extractedIntelligence={},
-                engagementPhase="initial"
-            )
+            reply="I'm having some trouble understanding. Can you please repeat that?",
+            confidence=0.0,
+            scamDetected=False,
+            scamType="Unknown",
+            extractedIntelligence={},
+            engagementPhase="initial"
         ).model_dump(),
         media_type="application/json"
     )
