@@ -10,7 +10,7 @@ import sys
 import httpx
 import logging
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, List, Optional, Union
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Header, BackgroundTasks, Request
@@ -40,7 +40,7 @@ class Message(BaseModel):
     """Incoming message structure"""
     sender: str = Field(..., description="Either 'scammer' or 'user'")
     text: str = Field(..., description="Message content")
-    timestamp: Optional[str] = Field(default=None, description="ISO-8601 timestamp")
+    timestamp: Optional[Union[str, int, float]] = Field(default=None, description="ISO-8601 timestamp or epoch millis")
 
 
 class Metadata(BaseModel):
