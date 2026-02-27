@@ -19,7 +19,7 @@ class Settings:
     
     # Session Settings
     MAX_MESSAGES_PER_SESSION: int = int(os.getenv("MAX_MESSAGES_PER_SESSION", "20"))
-    MIN_MESSAGES_FOR_CALLBACK: int = int(os.getenv("MIN_MESSAGES_FOR_CALLBACK", "3"))
+    MIN_MESSAGES_FOR_CALLBACK: int = int(os.getenv("MIN_MESSAGES_FOR_CALLBACK", "6"))
     SESSION_TIMEOUT_SECONDS: int = int(os.getenv("SESSION_TIMEOUT_SECONDS", "3600"))
     
     # GUVI Callback URL (MANDATORY for evaluation)

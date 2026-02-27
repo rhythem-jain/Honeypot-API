@@ -132,8 +132,8 @@ class IntelligenceExtractor:
         
         # Context-aware: look for account numbers near keywords
         context_patterns = [
-            re.compile(r'(?:account|a/c|acc|acct)[\s#:.-]*?(\d{9,18})', re.IGNORECASE),
-            re.compile(r'(\d{9,18})[\s]*(?:account|a/c)', re.IGNORECASE),
+            re.compile(r'(?:account|a/c|acc|acct|number|no\.?)[^\d]{0,15}(\d{9,18})', re.IGNORECASE),
+            re.compile(r'(\d{9,18})[^\d]{0,5}(?:account|a/c)', re.IGNORECASE),
         ]
         for pattern in context_patterns:
             for match in pattern.findall(text):

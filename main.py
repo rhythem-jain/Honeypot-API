@@ -141,16 +141,16 @@ async def send_callback_to_guvi(session_id: str):
         logger.error(f"❌ Session {session_id} not found for callback")
         return
     
-    if session.callback_sent:
-        logger.warning(f"⚠️ Callback already sent for session {session_id}")
-        return
-    
     # Prepare the payload (MUST match GUVI's expected format)
+    # Calculate engagement duration
+    duration_seconds = int((datetime.utcnow() - session.created_at).total_seconds())
+    
     payload = {
         "sessionId": session_id,
         "scamDetected": session.scam_detected,
         "totalMessagesExchanged": session.total_messages,
         "extractedIntelligence": session.intelligence.to_dict(),
+        "engagementDurationSeconds": duration_seconds,
         "agentNotes": "; ".join(session.agent_notes) if session.agent_notes else "Scammer engaged successfully"
     }
     
@@ -179,18 +179,15 @@ async def send_callback_to_guvi(session_id: str):
 
 def should_trigger_callback(session) -> bool:
     """Determine if we should send callback to GUVI"""
-    if session.callback_sent:
-        return False
-    
     if not session.scam_detected:
         return False
     
-    # Send callback if we have good intel
-    if session.has_good_intel:
+    # Always re-send to update GUVI with latest intel and metrics
+    if session.total_messages >= settings.MIN_MESSAGES_FOR_CALLBACK:
         return True
     
-    # Send callback if enough messages exchanged
-    if session.total_messages >= settings.MIN_MESSAGES_FOR_CALLBACK:
+    # Send callback if we have good intel
+    if session.has_good_intel:
         return True
     
     return False
